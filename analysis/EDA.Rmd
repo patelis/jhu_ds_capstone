@@ -1,0 +1,323 @@
+---
+title: "Text Exploratory Analysis"
+author: "Konstantinos Patelis"
+date: "`r Sys.Date()`"
+output: rmdformats::material
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Introduction
+
+Nowadays, people type more and more on their mobile devices, sending emails, social networking, etc. To improve user experience, there are nowadays many solutions to make it easier to type. One such solution is implementing predictive text models to facilitate faster and easier typing. The main goal of this project is to create a NLP predictive model, that would be able to predict the next word in a partly typed sentence. We will use three corpora, originating from news, blog and twitter posts in the english language to train and test our model, before creating a shiny app to offer our solution to the end users.
+
+In this report, we will explore our data sets, provided by SwiftKey as part of the Coursera Data Sciens Capstone project, to gain an initial understanding of these texts.
+
+```{r libraries}
+
+library(here)
+library(tidyverse)
+library(dtplyr)
+library(tidyfast)
+library(tidytext)
+library(lexicon)
+library(knitr)
+theme_set(theme_bw())
+
+source(here("analysis", "functions.R"))
+
+```
+
+# Load Data
+
+We will load the data from the data sources that are in English, specifically the files:
+
+1.  **en_US.blogs.txt**
+
+2.  **en_US.news.txt**
+
+3.  **en_US.twitter.txt**
+
+Since the data is quite substantial in size, we will perform our initial exploration on a subset of each corpus. We construct a function `read_text` that is able to read a specified proportion of lines, or a number of lines. We are able to set up a seed to ensure reproducibility. Initially, we read 10% of the lines from each corpus.
+
+```{r load_data, warning=FALSE}
+
+tweets_loc <- here("data", "final", "en_US", "en_US.twitter.txt")
+news_loc <- here("data", "final", "en_US", "en_US.news.txt")
+blogs_loc <- here("data", "final", "en_US", "en_US.blogs.txt")
+
+tweets <- read_text(tweets_loc, prows = 0.1, seed = 1234) %>% 
+  as_tibble() %>% 
+  mutate(source = "tweets", id = paste0("tweet_", row_number()))
+
+news <- read_text(news_loc, prows = 0.1, seed = 5678) %>% 
+  as_tibble() %>% 
+  mutate(source = "news", id = paste0("news_", row_number()))
+
+blogs <- read_text(blogs_loc, prows = 0.1, seed = 9012) %>% 
+  as_tibble() %>% 
+  mutate(source = "blogs", id = paste0("blog_", row_number()))
+
+corpora <- bind_rows(tweets, news, blogs)
+
+
+```
+
+Let us first look at some basic summaries of each corpus:
+
+```{r summary}
+
+corpora %>% 
+  group_by(source) %>% 
+  count() %>% 
+  left_join(corpora %>% 
+              unnest_tokens(words, value) %>% 
+              group_by(source) %>% 
+              count(), by = "source") %>% 
+  rename(lines = n.x, words = n.y) %>% 
+  kable()
+
+```
+
+# Data Cleaning
+
+As a first step, we will cleanse our data sets of any profanity using one of the profanity dictionaries in the `lexicon` package. Then we will remove common words that do not convey any meaning, such as "the" and "is", known as stop words. To do both of these, we will need to tokenize our documents on word-level (unigrams).
+
+```{r remove_profanity}
+
+words <- corpora %>% 
+  unnest_tokens(word, value, token = "words")
+
+profanity <- tibble(word = c(profanity_alvarez, 
+                             profanity_arr_bad, 
+                             profanity_banned, 
+                             profanity_racist, 
+                             profanity_zac_anger)
+                    ) %>% 
+              distinct()
+
+words_clean <- words %>% 
+  mutate(word = str_replace_all(word, "’", "'")) %>% 
+  anti_join(profanity) %>% 
+  anti_join(stop_words) %>% 
+  filter(!str_detect(word, "(?<=^| )[-.]*\\d+(?:\\.\\d+)?(?= |\\.?$)|\\d+(?:,\\d{3})+(\\.\\d+)*"))
+
+```
+
+Our data cleaning is not perfect; there are unfortunately more ways to spell profanity than what is recorded in all the dictionaries we used. The dictionaries might also not contain past tense, so some words might escape our attention. At this point, we'll proceed as-is , and if we encounter any profanity in our analysis it will be removed manually.
+
+# Data Analysis
+
+## Unigram Frequency
+
+```{r word_count}
+
+words_count <- words_clean %>% 
+  group_by(source, word) %>% 
+  count(sort = TRUE) %>% 
+  ungroup()
+
+words_count %>% 
+  group_by(source) %>% 
+  slice_head(n = 10) %>% 
+  mutate(word = reorder_within(word, n, source)) %>%
+  ungroup() %>% 
+  ggplot(aes(x = n, y = word, fill = source)) +  
+   geom_col(show.legend = FALSE) + 
+   facet_grid(rows = vars(source), scales = "free", space = "free_y", drop = TRUE) + 
+   scale_y_reordered() + 
+   scale_x_continuous(name = "count")
+
+```
+
+Looking at the most frequently used words across each source we can see some commonalities; words like "love", "time", "people", "day", "week" are prevalent in all sources. There are also words that are more specific to a specific source, e.g. rt (shorthand for retweet), twitter, and follow are words associated with twitter actions (or the name of the social network itself). Words like "lol" and "haha" are more common in tweets rather than news articles or blog posts. In news articles, seeing words like "police", "school", "public" gives as a general idea what these articles might be about.
+
+While these are the most frequent words, we can see that across all words in the respective source, their frequency is less than 1%.
+
+```{r word_frequency}
+
+words_count %>% 
+  group_by(source) %>% 
+  mutate(freq = n / sum(n)) %>% 
+  slice_head(n = 20) %>% 
+  mutate(word = reorder_within(word, freq, source)) %>%
+  ungroup() %>% 
+  ggplot(aes(x = freq, y = word, fill = source)) +  
+   geom_col(show.legend = FALSE) + 
+   facet_grid(rows = vars(source), scales = "free", space = "free_y", drop = TRUE) + 
+   scale_y_reordered() + 
+   scale_x_continuous(name = "frequency", labels = scales::percent)
+
+```
+
+There are also words with extremely high character count. There are usually words with repeated/dragged out letters, URLs, symbols, etc. After reviewing the longest words, I've decided to remove words with more than 18 characters. This does not ensure that we capture all instances of the above, but hopefully any remaining occurrences will be filtered out by next steps in our analysis. There are also instances of strings consisting of underscores, or underscores as part of emoticons, as well as other cases of such as in twitter usernames that we will also be removing.
+
+```{r word_length}
+
+words_clean %>% 
+  mutate(str_len = str_length(word)) %>% 
+  arrange(desc(str_len)) %>% 
+  head(n = 20) %>% 
+  kable()
+
+```
+
+```{r word_remove_long_strings}
+
+words_clean <- words_clean %>% 
+  mutate(str_len = str_length(word)) %>% 
+  filter(str_len < 19, 
+         !str_detect(word, "_"))
+
+```
+
+How many unique words are required to cover a specific portion of all word instances in the language (e.g. 50 or 90%)? While we do not have access to all instances of language, we can estimate the statistic using our sample of texts. We will calculate this across all words with character count less than nineteen, minus any profanity and numbers. We can also filter for the latin alphabet, to avoid including words from other languages (e.g. Greek, Chinese, Japanese) and other symbols, and then also remove any words that have vowels or syllables repeated many times (e.g. heeeey, hahahaha).
+
+```{r word_uniqueness}
+
+words_unique_freq <- words %>% 
+  mutate(word = str_replace_all(word, "’", "'")) %>% 
+  anti_join(profanity) %>% 
+  filter(str_length(word) < 19, # mostly removes words that are either made-up or combination of many words without spaces
+         str_detect(word, "^[a-zA-Z']+$"), # helps filter out languages that don't use the latin alphabet, e.g. greek, chinese, japanese and symbols, URLs, numbers
+         !str_detect(word, "([a-zA-Z]+)\\1{3,}")) %>% # filter out dragged out words, e.g. heeeeey, loooool
+  group_by(word) %>% 
+  count() %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  mutate(freq = n / sum(n), 
+         cum_freq = cumsum(freq))
+
+freq_50_percent <- words_unique_freq %>% 
+  filter(cum_freq < 0.5) %>% 
+  count() %>% 
+  pull() + 1L
+
+freq_90_percent <- words_unique_freq %>% 
+  filter(cum_freq < 0.9) %>% 
+  count() %>% 
+  pull() + 1L
+
+freq_95_percent <- words_unique_freq %>% 
+  filter(cum_freq < 0.95) %>% 
+  count() %>% 
+  pull() + 1L
+
+freq_99_percent <- words_unique_freq %>% 
+  filter(cum_freq < 0.99) %>% 
+  count() %>% 
+  pull() + 1L
+
+all_words <- words_unique_freq %>% 
+  count() %>% 
+  pull()
+
+```
+
+After reducing our list of unigrams by applying above filtering conditions, we end up with `r all_words` overall, but only `r freq_50_percent` are required to describe 50% of all word instances, while `r freq_90_percent` words are required for 90% coverage.
+
+## Ngram Frequency
+
+Let us now consider ngrams of higher length, to see what are the most common combinations of words and the rate at which they appear across each type of source. Since we are looking at word combinations, we will not be removing any stopwords from our data.
+
+### Bigrams
+
+```{r bigrams}
+
+bigram <- corpora %>% 
+  unnest_tokens(bigram, value, token = "ngrams", n = 2) %>% 
+  dt_separate(col = bigram, into = c("word1", "word2"), sep = " ", remove = FALSE) %>% 
+  as_tibble()
+
+bigram <- bigram %>% 
+  filter(str_length(word1) < 19, 
+         str_detect(word1, "^[a-zA-Z']+$"), 
+         !str_detect(word1, "([a-zA-Z]+)\\1{3,}"), 
+         str_length(word2) < 19, 
+         str_detect(word2, "^[a-zA-Z']+$"), 
+         !str_detect(word2, "([a-zA-Z]+)\\1{3,}")) %>% 
+  anti_join(profanity, by = c("word1" = "word")) %>% # joins currently don't work very well with dtplyr
+  anti_join(profanity, by = c("word2" = "word")) 
+
+bigram_count <- bigram %>% 
+  lazy_dt() %>% 
+  group_by(source, bigram, word1, word2) %>% 
+  count() %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  as_tibble()
+
+bigram_count %>% 
+  group_by(source) %>% 
+  mutate(freq = n / sum(n)) %>% 
+  slice_head(n = 20) %>% 
+  mutate(bigram = reorder_within(bigram, n, source)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = freq, y = bigram, fill = source)) + 
+   geom_col(show.legend = FALSE) + 
+   facet_grid(rows = vars(source), scales = "free", space = "free_y", drop = TRUE) + 
+   scale_y_reordered() + 
+   scale_x_continuous(name = "frequency", labels = scales::percent)
+
+```
+
+### Trigrams
+
+```{r trigrams}
+
+trigram <- corpora %>% 
+  unnest_tokens(trigram, value, token = "ngrams", n = 3) %>% 
+  dt_separate(col = trigram, into = c("word1", "word2", "word3"), sep = " ", remove = FALSE) %>% 
+  as_tibble()
+
+trigram <- trigram %>% 
+  filter(str_length(word1) < 19, 
+         str_detect(word1, "^[a-zA-Z']+$"), 
+         !str_detect(word1, "([a-zA-Z]+)\\1{3,}"), 
+         str_length(word2) < 19, 
+         str_detect(word2, "^[a-zA-Z']+$"), 
+         !str_detect(word2, "([a-zA-Z]+)\\1{3,}"), 
+         str_length(word3) < 19, 
+         str_detect(word3, "^[a-zA-Z']+$"), 
+         !str_detect(word3, "([a-zA-Z]+)\\1{3,}")) %>% 
+  anti_join(profanity, by = c("word1" = "word")) %>% # joins currently don't work very well with dtplyr
+  anti_join(profanity, by = c("word2" = "word")) %>% 
+  anti_join(profanity, by = c("word3" = "word"))
+
+trigram_count <- trigram %>% 
+  lazy_dt() %>% 
+  group_by(source, trigram, word1, word2, word3) %>% 
+  count() %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  as_tibble()
+
+trigram_count %>% 
+  group_by(source) %>% 
+  mutate(freq = n / sum(n)) %>% 
+  slice_head(n = 20) %>% 
+  mutate(trigram = reorder_within(trigram, n, source)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = freq, y = trigram, fill = source)) + 
+   geom_col(show.legend = FALSE) + 
+   facet_grid(rows = vars(source), scales = "free", space = "free_y", drop = TRUE) + 
+   scale_y_reordered() + 
+   scale_x_continuous(name = "frequency", labels = scales::percent)
+
+```
+
+We can see that across all three sources, similar bigrams prevail. In particular combination with the word "the" are common, e.g. "of the", "in the", "to the", etc. Looking at tweets, "thanks for" and "thank you" also stand out; the reason is more clear when looking at the frequencies for trigrams. The most frequent phrases are some variation of "thank you for the follow". Across news and blogs, phrases such as "one of the", "a lot of" and "as well as" are quite frequent; these are commonly used in the narrative of a story, which is quite aligned with the purpose of news and blog articles.
+
+# Next Steps
+
+So far, we have investigated our three different sources trying to figure out a strategy to deal with some common issues when building predictive text applications that are based on existing data, i.e. removing profanity and unusual words from our dictionary, as well as non-english words (at least to an extent). We looked at the frequencies of the most common unigrams/bigrams/trigrams and checked how many distinct words are needed to account for specific percentages of word instances in the language.
+
+Of course, there is always room for improvement and refinement. For example, there are probably other foreign words that our filtering approach has missed, or we could filter out words/phrases based on whether they are within a desired threshold of overall coverage of word instances in the language.
+
+Our next steps are the following:
+
+1.  **Build an n-gram model**. A common approach would be to use Markov Chains to calculate the probability of a word coming up based on the preceding n-gram. We can improve upon this basic model by using approaches such as Katz's backoff or Kneser-Ney Smoothing, which would allow us to make predictions even based on unseen n-grams. This is helpful if the user types a combination of words that was not seen in the corpora, i.e. the n-gram wasn't observed.
+2.  **Design a word-prediction shiny app**. This would entail designing a UI that will accept user input and use our fitted model to make a prediction on what the next word might be.
+3.  **Prepare a presentation to pitch the solution**.
