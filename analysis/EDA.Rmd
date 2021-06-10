@@ -11,16 +11,16 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 # Introduction
 
-Nowadays, people type more and more on their mobile devices, sending emails, social networking, etc. To improve user experience, there are nowadays many solutions to make it easier to type. One such solution is implementing predictive text models to facilitate faster and easier typing. The main goal of this project is to create a NLP predictive model, that would be able to predict the next word in a partly typed sentence. We will use three corpora, originating from news, blog and twitter posts in the english language to train and test our model, before creating a shiny app to offer our solution to the end users.
+Nowadays, people type more and more on their mobile devices, sending emails, social networking, etc. To improve user experience, there are currently many solutions to make it easier to type. One such solution is implementing predictive text models to facilitate faster and easier typing. The main goal of this project is to create a NLP predictive model, that would be able to predict the next word in a partly typed sentence. We will use three corpora, originating from news, blog and twitter posts in the english language to train and test our model, before creating a shiny app to offer our solution to end users.
 
-In this report, we will explore our data sets, provided by SwiftKey as part of the Coursera Data Sciens Capstone project, to gain an initial understanding of these texts.
+In this report, we will explore our data sets, provided by SwiftKey as part of the Coursera Data Science Capstone project, to gain an initial understanding of these texts.
 
 ```{r libraries}
 
 library(here)
 library(tidyverse)
-library(dtplyr)
-library(tidyfast)
+library(dtplyr) # Use data.table to enhance speed of some calcs
+library(tidyfast) # Use data.table under the hood to enhance speed of some calcs
 library(tidytext)
 library(lexicon)
 library(knitr)
@@ -40,7 +40,7 @@ We will load the data from the data sources that are in English, specifically th
 
 3.  **en_US.twitter.txt**
 
-Since the data is quite substantial in size, we will perform our initial exploration on a subset of each corpus. We construct a function `read_text` that is able to read a specified proportion of lines, or a number of lines. We are able to set up a seed to ensure reproducibility. Initially, we read 10% of the lines from each corpus.
+Since the data is quite substantial in size, we will perform our initial exploration on a subset of each corpus. We construct a function `read_text` that is able to read a specified proportion of lines, or a number of lines. We set a seed to ensure reproducibility. Initially, we read 10% of the lines from each corpus.
 
 ```{r load_data, warning=FALSE}
 
@@ -61,7 +61,6 @@ blogs <- read_text(blogs_loc, prows = 0.1, seed = 9012) %>%
   mutate(source = "blogs", id = paste0("blog_", row_number()))
 
 corpora <- bind_rows(tweets, news, blogs)
-
 
 ```
 
@@ -318,6 +317,6 @@ Of course, there is always room for improvement and refinement. For example, the
 
 Our next steps are the following:
 
-1.  **Build an n-gram model**. A common approach would be to use Markov Chains to calculate the probability of a word coming up based on the preceding n-gram. We can improve upon this basic model by using approaches such as Katz's backoff or Kneser-Ney Smoothing, which would allow us to make predictions even based on unseen n-grams. This is helpful if the user types a combination of words that was not seen in the corpora, i.e. the n-gram wasn't observed.
+1.  **Build a model**. A common approach would be to use Markov Chains to calculate the probability of a word coming up based on the preceding n-gram. These are commonly known as ngram models. We can improve upon this basic model by using approaches such as Katz's backoff or Kneser-Ney Smoothing, which would allow us to make predictions even based on unseen n-grams. This is helpful if the user types a combination of words that was not seen in the corpora, i.e. the n-gram wasn't observed.
 2.  **Design a word-prediction shiny app**. This would entail designing a UI that will accept user input and use our fitted model to make a prediction on what the next word might be.
 3.  **Prepare a presentation to pitch the solution**.
