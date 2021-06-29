@@ -8,41 +8,84 @@
 #
 
 library(shiny)
+library(data.table)
+library(DT)
+library(stringr)
+library(stringi)
+library(bslib)
+source("helpers.R")
 
-# Define UI for application that draws a histogram
+l <- readRDS("models/stupid_backoff_model.Rds")
+
+lookup <- l[["lookup"]]
+ngram_lut <- l[["ngram"]]
+
+app_theme <- bs_theme(primary = "#5281CE", 
+                      heading_font = font_collection(font_google("Arvo"), 
+                      font_google("Catamaran"), font_google("Ubuntu")), 
+                      font_scale = 1.5, `enable-gradients` = TRUE, `enable-shadows` = TRUE, 
+                      spacer = "2rem", bootswatch = "superhero")
+
+rm(l)
+
+# Define UI for application that predicts a word from a sentence
 ui <- fluidPage(
-
+    bootstrapLib(app_theme), 
+    
     # Application title
-    titlePanel("Old Faithful Geyser Data"),
+    titlePanel("WordPredictR"),
 
-    # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
-            sliderInput("bins",
-                        "Number of bins:",
-                        min = 1,
-                        max = 50,
-                        value = 30)
+            textInput(inputId = "id_sentence",
+                      label = NULL,
+                      placeholder = "Start typing your sentence..."), 
+            br(), 
+            strong("Introduction"), 
+            p("Welcome to the word predicting shiny app. 
+               Simply start typing your sentence, press space and see the top 5 predicted words. 
+               You can click on the desired word from the table and it will be autofilled 
+               in the sentence and the predictions will refresh.
+               Clicking on other parts of the table other than the words will not autofill the word.
+               For each prediction you can also see its probability.")
         ),
 
-        # Show a plot of the generated distribution
         mainPanel(
-           plotOutput("distPlot")
+           dataTableOutput("word_pred")
         )
     )
 )
 
-# Define server logic required to draw a histogram
 server <- function(input, output) {
-
-    output$distPlot <- renderPlot({
-        # generate bins based on input$bins from ui.R
-        x    <- faithful[, 2]
-        bins <- seq(min(x), max(x), length.out = input$bins + 1)
-
-        # draw the histogram with the specified number of bins
-        hist(x, breaks = bins, col = 'darkgray', border = 'white')
+    
+    observeEvent(input$word_pred_cell_clicked$value, {
+        
+        x <- input$word_pred_cell_clicked
+        
+        if (is.null(x$value) || x$col != 1) return()
+        
+        y <- input$id_sentence
+        append <- paste0(y, x$value, " ")
+        
+        updateTextInput(session = getDefaultReactiveDomain(), inputId = "id_sentence", value = append)
+        
     })
+    
+    output$word_pred <- renderDataTable({
+        
+        req(str_detect(input$id_sentence, "\\s$"), cancelOutput = TRUE)
+        
+        pred <- predict_ngram(input$id_sentence, ngram_l = ngram_lut, lookup = lookup, n_words_predict = 5)
+        
+        pred[, `:=`(order = NULL)]
+        
+        setnames(pred, old = c("word_5", "prob"), new = c("word", "probability"))
+        
+        datatable(pred, options = list(dom = "t")) %>% 
+            formatPercentage("probability", 2)
+
+    })
+    
 }
 
 # Run the application 

@@ -1,0 +1,14 @@
+name: jhu_ds_capstone
+title: jhu_ds_capstone
+username:
+account: kpatelis
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 4316163
+bundleId: 4760126
+url: https://kpatelis.shinyapps.io/jhu_ds_capstone/
+when: 1624753262.35906
+lastSyncTime: 1624753262.35906
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: analysis/EDA.html|analysis/EDA.Rmd|analysis/functions.R|analysis/model_2.0.Rmd|analysis/rsconnect/documents/EDA.Rmd/rpubs.com/rpubs/Document.dcf|benchmark/benchmark.R|benchmark/data/blogs.txt|benchmark/data/tweets.txt|benchmark/generate_dataset.R|benchmark/README.md|models/kneser_ney_model.Rds|models/stupid_backoff_model.Rds|test.Rds

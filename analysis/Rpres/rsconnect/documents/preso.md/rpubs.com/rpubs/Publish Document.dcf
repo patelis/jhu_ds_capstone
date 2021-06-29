@@ -1,0 +1,11 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/786587/d565d034ba9e461399ace58566e673a8
+bundleId: https://api.rpubs.com/api/v1/document/786587/d565d034ba9e461399ace58566e673a8
+url: http://rpubs.com/publish/claim/786587/c580439c19c6457caf8ed8de0c427693
+when: 1624964443.40433
+lastSyncTime: 1624964443.40433

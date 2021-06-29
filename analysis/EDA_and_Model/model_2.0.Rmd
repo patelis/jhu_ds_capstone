@@ -1,0 +1,136 @@
+---
+title: "Model 2.0"
+author: "Konstantinos Patelis"
+date: "11/06/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r libraries}
+
+library(here)
+library(tidyverse)
+library(stringi)
+library(data.table)
+library(dtplyr)
+library(tidyfast)
+library(tidytext)
+library(lexicon)
+library(knitr)
+theme_set(theme_bw())
+
+source(here("analysis", "functions.R"))
+```
+
+
+```{r load_data, warning=FALSE}
+
+k <- .1
+
+tweets_loc <- here("data", "final", "en_US", "en_US.twitter.txt")
+news_loc <- here("data", "final", "en_US", "en_US.news.txt")
+blogs_loc <- here("data", "final", "en_US", "en_US.blogs.txt")
+
+tweets <- read_text(tweets_loc, prows = k, seed = 1234) %>%
+  as_tibble() %>%
+  mutate(source = "tweets", id = paste0("tweet_", row_number()))
+
+news <- read_text(news_loc, prows = k, seed = 5678) %>%
+  as_tibble() %>%
+  mutate(source = "news", id = paste0("news_", row_number()))
+
+blogs <- read_text(blogs_loc, prows = k, seed = 9012) %>%
+  as_tibble() %>%
+  mutate(source = "blogs", id = paste0("blog_", row_number()))
+
+corpora <- bind_rows(tweets, news, blogs) %>%
+  unnest_tokens(output = "text", input = "value", token = "sentences") %>% 
+  mutate(id_sentence = paste0(id, "_", row_number()))
+
+word_split <- corpora %>% 
+  unnest_tokens(output = "words", input = "text", token = "words")
+
+profanity <- tibble(
+  word = c(
+    profanity_alvarez,
+    profanity_arr_bad,
+    profanity_banned,
+    profanity_racist,
+    profanity_zac_anger)
+  ) %>%
+  distinct() %>% 
+  unlist()
+
+corpora_profanity_id <- word_split %>% 
+  filter(words %in% profanity) %>%
+  pull(id_sentence) %>%
+  unique()
+
+corpora <- corpora %>% 
+  filter(!(id_sentence %in% corpora_profanity_id)) %>% 
+  mutate(text = stri_enc_toascii(text), 
+         text = str_replace_all(text, "[[:punct:]]|[[:digit:]]", ""), 
+         text = str_squish(text))
+
+
+```
+
+
+```{r}
+
+# ngram_list <- make_ngram(data = corpora, n = 5)
+# rm(word_split, corpora, blogs, news, tweets, corpora_profanity_id, profanity)
+# 
+# ngram_stb <- stupid_backoff(ngram_list)
+# 
+# rm(ngram_list)
+# 
+# gc()
+# 
+# ngram_stb_pruned <- pruner(ngram_stb, k = 3, ranking = 5) # prefer absolute pruning, easier to adjust
+# 
+# lookup <- lookup_table(ngram_stb_pruned)
+# ngram_lut <- lut_replace(ngram_stb_pruned, lookup)
+# 
+# save_dat <- list(lookup = lookup, ngram = ngram_lut)
+# 
+# saveRDS(save_dat, file = here::here("models", "stupid_backoff_model2.Rds"))
+# 
+# stdb <- readRDS(here::here("models", "stupid_backoff_model.Rds"))
+# lookup <- stdb[["lookup"]]
+# ngram_lut <- stdb[["ngram"]]
+# rm(stdb)
+
+```
+
+```{r}
+
+# ngram_list <- make_ngram(data = corpora, n = 5)
+# 
+# rm(word_split, corpora, blogs, news, tweets, corpora_profanity_id, profanity)
+# gc()
+# 
+# ngram_kn <- kneser_ney(ngram_list)
+# ngram_kn <- readRDS("test2.Rds")
+# rm(ngram_list)
+# 
+# gc()
+# 
+# ngram_kn_pruned <- pruner(ngram_kn, k = 3, ranking = 5) # prefer absolute pruning, easier to adjust
+# 
+# lookup <- lookup_table(ngram_kn_pruned)
+# ngram_lut <- lut_replace(ngram_kn_pruned, lookup)
+# 
+# save_dat <- list(lookup = lookup, ngram = ngram_lut)
+# 
+# saveRDS(save_dat, file = here::here("models", "kneser_ney_model2.Rds"))
+# 
+# kn <- readRDS(here::here("models", "kneser_ney_model2.Rds"))
+# lookup <- kn[["lookup"]]
+# ngram_lut <- kn[["ngram"]]
+# rm(kn)
+
+```
