@@ -207,21 +207,22 @@ benchmark <- compiler::cmpfun(function(FUN, ..., sent.list, ext.output=T) {
 # the three most frequent English words.
 predict.baseline <- function(x){c('the', 'on', 'a')}
 
-
+predict_gram <- function(x){predict_ngram(x, ngram_l = ngram_lut, lookup = lookup, n_words_predict = 3)}
 
 ################################################################################################
 #
 # 04. Perform the benchmark
 #
 ################################################################################################
-benchmark(predict.baseline, 
+benchmark(predict.baseline,
           # additional parameters to be passed to the prediction function can be inserted here
-          sent.list = list('tweets' = tweets, 
-                           'blogs' = blogs), 
+          sent.list = list('tweets' = tweets,
+                           'blogs' = blogs),
           ext.output = T)
 
-benchmark(predict_kn, 
-          ngram_lookup = lookup, ngram_table = table, n_words_predict = 3, profanity_filter = profanity, word_len_max = 18,
-          sent.list = list('tweets' = tweets, 
-                           'blogs' = blogs), 
+benchmark(predict_gram,
+          sent.list = list(
+                           'tweets' = tweets,
+                           'blogs' = blogs
+                           ),
           ext.output = T)
